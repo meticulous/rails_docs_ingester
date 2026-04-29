@@ -1,0 +1,50 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "optparse"
+require "fileutils"
+require "rdoc"
+require "rails_docs_ingester"
+
+options = {}
+parser = OptionParser.new do |op|
+  op.banner = "Usage: rails_docs_ingester [options] <source-dir>..."
+
+  op.on("--output PATH", "JSONL output path (required)") { |v| options[:output] = v }
+  op.on("--channel CHANNEL", "Package channel (e.g. 8.1.3, edge)") { |v| options[:channel] = v }
+  op.on("--git-ref REF", "Git ref this snapshot represents") { |v| options[:git_ref] = v }
+  op.on("--git-sha SHA", "Resolved git SHA") { |v| options[:git_sha] = v }
+  op.on("--ord N", Integer, "Monotonic ord for cross-version sort") { |v| options[:ord] = v }
+  op.on("--source-slug SLUG", "Source slug (default: rails)") { |v| options[:source_slug] = v }
+  op.on("--source-display-name NAME") { |v| options[:source_display_name] = v }
+  op.on("--source-github-repo REPO") { |v| options[:source_github_repo] = v }
+  op.on("--quiet", "Suppress RDoc progress output") { options[:quiet] = true }
+  op.on("--debug", "Print RDoc backtraces on error") { options[:debug] = true }
+end
+sources = parser.parse!
+
+if options[:output].nil? || sources.empty?
+  warn parser.help
+  exit 1
+end
+
+require "tmpdir"
+Dir.mktmpdir("rails-docs-rdoc-") do |rdoc_tmp|
+  argv = ["-f", "rails_docs_ingester",
+          "-o", File.join(rdoc_tmp, "out"),
+          "--rails-docs-output", options[:output]]
+  argv << "-q" if options[:quiet]
+  argv << "--debug" if options[:debug]
+  argv += ["--rails-docs-channel", options[:channel]] if options[:channel]
+  argv += ["--rails-docs-git-ref", options[:git_ref]] if options[:git_ref]
+  argv += ["--rails-docs-git-sha", options[:git_sha]] if options[:git_sha]
+  argv += ["--rails-docs-ord", options[:ord].to_s] if options[:ord]
+  argv += ["--rails-docs-source-slug", options[:source_slug]] if options[:source_slug]
+  argv += ["--rails-docs-source-display-name", options[:source_display_name]] if options[:source_display_name]
+  argv += ["--rails-docs-source-github-repo", options[:source_github_repo]] if options[:source_github_repo]
+  argv += sources
+
+  RDoc::RDoc.new.document(argv)
+end
+
+warn "Wrote #{options[:output]}"
