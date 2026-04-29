@@ -6,3 +6,7 @@
 /pkg/
 /spec/reports/
 /tmp/
+
+# Library: don't lock dependency versions; consumers resolve their own.
+# Vintage-Ruby containers will produce per-container Gemfile.locks separately.
+Gemfile.lock
