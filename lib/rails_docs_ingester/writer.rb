@@ -96,6 +96,12 @@ module RailsDocsIngester
       end
     end
 
+    # Must run AFTER write_entity_identities. The dedup check on
+    # @emitted_identities skips any FQN already emitted, so internally-defined
+    # entities (with their proper framework_slug) win attribution; external
+    # stubs only fill in identities for FQNs the source tree references but
+    # doesn't define (Object, Kernel, ActiveModel::Model included from outside
+    # the parsed dirs, etc.).
     def write_external_identity_stubs
       external_refs.each do |fqn, kind|
         next if @emitted_identities.include?([fqn, kind, nil])
@@ -330,7 +336,9 @@ module RailsDocsIngester
     def kind_for(klass)
       case klass
       when RDoc::NormalModule then "module"
-      else "class"
+      when RDoc::NormalClass, RDoc::SingleClass then "class"
+      else
+        raise ArgumentError, "Unexpected RDoc class node: #{klass.class}"
       end
     end
 
@@ -423,6 +431,12 @@ module RailsDocsIngester
     end
 
     def framework_slug_for(klass)
+      @framework_slug_cache ||= {}
+      return @framework_slug_cache[klass] if @framework_slug_cache.key?(klass)
+      @framework_slug_cache[klass] = compute_framework_slug(klass)
+    end
+
+    def compute_framework_slug(klass)
       first_file = klass.in_files.first
       return nil unless first_file
       path = first_file.is_a?(String) ? first_file : (first_file.respond_to?(:full_name) ? first_file.full_name : nil)
