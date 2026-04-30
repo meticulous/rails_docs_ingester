@@ -2,6 +2,8 @@
 
 require "json"
 require "set"
+require "rdoc"
+require "rdoc/markup/to_html"
 
 module RailsDocsIngester
   # Walks an RDoc::Store and emits JSONL records to an IO. The records match
@@ -189,6 +191,7 @@ module RailsDocsIngester
         visibility: "public",
         deprecated: false,
         doc_markdown: comment_text(klass.comment),
+        doc_html: comment_html(klass.comment),
         doc_summary: doc_summary(klass.comment),
         source_path: file_path,
         source_line_start: line
@@ -215,6 +218,7 @@ module RailsDocsIngester
         framework_slug: framework_slug_for(klass),
         visibility: "public",
         doc_markdown: comment_text(const.comment),
+        doc_html: comment_html(const.comment),
         doc_summary: doc_summary(const.comment),
         source_path: file_path,
         source_line_start: line
@@ -233,6 +237,7 @@ module RailsDocsIngester
         framework_slug: framework_slug_for(klass),
         visibility: attr.visibility&.to_s || "public",
         doc_markdown: comment_text(attr.comment),
+        doc_html: comment_html(attr.comment),
         doc_summary: doc_summary(attr.comment),
         source_path: file_path,
         source_line_start: line
@@ -254,6 +259,7 @@ module RailsDocsIngester
         visibility: meth.visibility&.to_s || "public",
         deprecated: false,
         doc_markdown: comment_text(meth.comment),
+        doc_html: comment_html(meth.comment),
         doc_summary: doc_summary(meth.comment),
         source_path: file_path,
         source_line_start: line,
@@ -373,6 +379,19 @@ module RailsDocsIngester
       text = comment.respond_to?(:text) ? comment.text : comment.to_s
       return nil if text.nil? || text.strip.empty?
       text
+    end
+
+    def comment_html(comment)
+      text = comment_text(comment)
+      return nil unless text
+      html_formatter.convert(text)
+    rescue StandardError => e
+      warn "[rails_docs_ingester] HTML render failed (#{e.class}: #{e.message})"
+      nil
+    end
+
+    def html_formatter
+      @html_formatter ||= RDoc::Markup::ToHtml.new(@options, nil)
     end
 
     def doc_summary(comment)
