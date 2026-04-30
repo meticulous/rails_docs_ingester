@@ -378,16 +378,51 @@ module RailsDocsIngester
       return nil unless comment
       text = comment.respond_to?(:text) ? comment.text : comment.to_s
       return nil if text.nil? || text.strip.empty?
-      text
+      # Multi-file class/module declarations (e.g. `module ActionCable`
+      # reopened across 43 files) are stitched by RDoc with "---"
+      # separator lines. Most reopens have empty boilerplate comments
+      # that contribute only separators. Drop them so we don't render
+      # a vertical bar of <hr>s after the real doc text.
+      parts = text.split(/^---$/).map(&:strip).reject(&:empty?)
+      return nil if parts.empty?
+      parts.join("\n\n")
     end
 
+    # Parse against the comment's declared format (markdown, rdoc, tomdoc, …).
+    # We can't go through RDoc::Comment#parse — it routes through
+    # RDoc::Text#parse which calls normalize_comment, and for Ruby-language
+    # comments that strips leading "#" characters from every line. That's
+    # right for raw `# foo` Ruby comments, but our text has already been
+    # normalized once on extraction. Re-running normalize_comment on a
+    # markdown header like `# Action Cable` strips the `#` and the markdown
+    # parser then sees a plain paragraph.
+    #
+    # Calling MARKUP_FORMAT[format].parse directly skips normalize_comment.
     def comment_html(comment)
+      return nil unless comment
       text = comment_text(comment)
       return nil unless text
-      html_formatter.convert(text)
+
+      format = effective_format(comment, text)
+      parser = RDoc::Text::MARKUP_FORMAT[format] || RDoc::Markup
+      document = parser.parse(text)
+      html_formatter.convert(document)
     rescue StandardError => e
       warn "[rails_docs_ingester] HTML render failed (#{e.class}: #{e.message})"
       nil
+    end
+
+    # Pick the format we should parse with. RDoc reports `comment.format`
+    # based on the host file's `# :markup:` directive — but `# :include:`
+    # of a README.md doesn't always propagate the directive, so the
+    # included markdown content can come back tagged as "rdoc". Detect
+    # that case by sniffing for ATX headers or markdown-style `[link](url)`
+    # syntax that don't appear in rdoc-format text.
+    def effective_format(comment, text)
+      declared = comment.respond_to?(:format) ? comment.format : "rdoc"
+      return declared if declared != "rdoc"
+      return "markdown" if text.match?(/(?:\A|\n)\#{1,6}\s\S/) || text.match?(/\[[^\]]+\]\([^)]+\)/)
+      declared
     end
 
     def html_formatter
