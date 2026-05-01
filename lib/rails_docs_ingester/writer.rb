@@ -374,6 +374,19 @@ module RailsDocsIngester
       "#{klass.full_name}#{separator}#{meth.name}"
     end
 
+    # Signatures that mark a "## Support" or "## License" block as the
+    # canonical boilerplate that 10/12 framework READMEs duplicate. The
+    # API site has a curated sidebar block for these — we don't want
+    # them inline in the doc body too (visual + SEO duplication).
+    SUPPORT_BOILERPLATE_RE = %r{api\.rubyonrails\.org|github\.com/rails/rails/issues|discuss\.rubyonrails\.org}.freeze
+    LICENSE_BOILERPLATE_RE = %r{opensource\.org/licenses/MIT|MIT[ -]License}i.freeze
+
+    # Markdown ATX (`## Heading`) or RDoc (`== Heading`) heading line for
+    # one of our trimmable sections, captured to the end of the doc so
+    # we can strip the entire trailing block in one substitution.
+    SUPPORT_TRAILER_RE = /\n+(?:#+|=+)\s+Support\b.*\z/m
+    LICENSE_TRAILER_RE = /\n+(?:#+|=+)\s+License\b.*\z/m
+
     def comment_text(comment)
       return nil unless comment
       text = comment.respond_to?(:text) ? comment.text : comment.to_s
@@ -385,7 +398,22 @@ module RailsDocsIngester
       # a vertical bar of <hr>s after the real doc text.
       parts = text.split(/^---$/).map(&:strip).reject(&:empty?)
       return nil if parts.empty?
-      parts.join("\n\n")
+      strip_boilerplate_sections(parts.join("\n\n"))
+    end
+
+    # Strip trailing "## Support" / "## License" blocks when they match
+    # the canonical Rails-README boilerplate (api/issues/discuss URLs
+    # and the MIT license link). If a framework ever puts framework-
+    # specific content under these headings, the URL signature won't
+    # match and we leave the section alone.
+    def strip_boilerplate_sections(text)
+      [SUPPORT_TRAILER_RE, SUPPORT_BOILERPLATE_RE,
+       LICENSE_TRAILER_RE, LICENSE_BOILERPLATE_RE].each_slice(2) do |trailer, sig|
+        if (match = text.match(trailer)) && match[0].match?(sig)
+          text = text.sub(trailer, "")
+        end
+      end
+      text.strip
     end
 
     # Parse against the comment's declared format (markdown, rdoc, tomdoc, …).
