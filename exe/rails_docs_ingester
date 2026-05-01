@@ -38,8 +38,13 @@ source_root = options[:source_root] ? File.expand_path(options[:source_root]) : 
 
 Dir.chdir(source_root) do
   Dir.mktmpdir("rails-docs-rdoc-", source_root) do |rdoc_tmp|
+    # `--visibility=private` keeps every method in the parsed tree —
+    # default is `:protected`, which drops privates before the writer
+    # runs. The rails-docs site separates them in the UI; we don't want
+    # them filtered at the data layer.
     argv = ["-f", "rails_docs_ingester",
             "-o", File.join(rdoc_tmp, "out"),
+            "--visibility=private",
             "--rails-docs-output", options[:output]]
     argv << "-q" if options[:quiet]
     argv << "--debug" if options[:debug]
