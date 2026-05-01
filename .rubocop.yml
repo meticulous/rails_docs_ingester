@@ -4,6 +4,8 @@ AllCops:
   SuggestExtensions: false
   Exclude:
     - test/fixtures/**/*       # Synthetic Rails-shaped fixtures aren't ours to police.
+    - vendor/**/*              # bundler installs gems here in CI; their source isn't ours.
+    - tmp/**/*
 
 Style/StringLiterals:
   EnforcedStyle: double_quotes
