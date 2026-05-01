@@ -82,6 +82,7 @@ module RailsDocsIngester
         slug = framework_slug_for(klass)
         next unless slug
         next if seen.include?(slug)
+
         seen << slug
         emit(type: "framework", slug: slug, display_name: FRAMEWORK_DISPLAY_NAMES.fetch(slug, slug.capitalize))
       end
@@ -107,6 +108,7 @@ module RailsDocsIngester
     def write_external_identity_stubs
       external_refs.each do |fqn, kind|
         next if @emitted_identities.include?([fqn, kind, nil])
+
         emit_identity(
           fqn: fqn,
           kind: kind,
@@ -165,8 +167,9 @@ module RailsDocsIngester
     def emit_identity(record)
       key = [record[:fqn], record[:kind], record[:scope]]
       return if @emitted_identities.include?(key)
+
       @emitted_identities << key
-      emit({type: "entity_identity"}.merge(record))
+      emit({ type: "entity_identity" }.merge(record))
     end
 
     # Entity versions
@@ -196,15 +199,15 @@ module RailsDocsIngester
         source_path: file_path,
         source_line_start: line
       )
-      if kind_for(klass) == "class"
-        sc_fqn = superclass_fqn(klass)
-        emit(
-          type: "class_version",
-          fqn: klass.full_name,
-          superclass_fqn: sc_fqn,
-          superclass_kind: sc_fqn ? "class" : nil
-        )
-      end
+      return unless kind_for(klass) == "class"
+
+      sc_fqn = superclass_fqn(klass)
+      emit(
+        type: "class_version",
+        fqn: klass.full_name,
+        superclass_fqn: sc_fqn,
+        superclass_kind: sc_fqn ? "class" : nil
+      )
     end
 
     def emit_constant_version_records(klass, const)
@@ -275,7 +278,9 @@ module RailsDocsIngester
         scope: scope,
         ghost: meth.is_a?(RDoc::GhostMethod),
         aliased_fqn: aliased ? method_fqn(aliased.parent, aliased) : nil,
-        aliased_scope: aliased ? (aliased.singleton ? "singleton" : "instance") : nil
+        aliased_scope: if aliased
+                         aliased.singleton ? "singleton" : "instance"
+                       end
       )
 
       params_for(meth).each_with_index do |param, idx|
@@ -317,6 +322,7 @@ module RailsDocsIngester
       references.each_with_index do |ref, idx|
         ancestor_fqn = include_target_fqn(ref)
         next unless ancestor_fqn
+
         emit(
           type: "inheritance_edge",
           child_fqn: klass.full_name,
@@ -351,13 +357,16 @@ module RailsDocsIngester
     def parent_fqn_for(fqn)
       parts = fqn.to_s.split("::")
       return nil if parts.size <= 1
+
       parts[0..-2].join("::")
     end
 
     def superclass_fqn(klass)
       return nil if klass.is_a?(RDoc::NormalModule)
+
       sc = klass.superclass
       return nil unless sc
+
       sc.is_a?(String) ? sc : sc.full_name
     rescue NoMethodError
       nil
@@ -366,6 +375,7 @@ module RailsDocsIngester
     def include_target_fqn(ref)
       mod = ref.module
       return ref.name if mod.is_a?(String) || mod.nil?
+
       mod.full_name
     end
 
@@ -378,8 +388,8 @@ module RailsDocsIngester
     # canonical boilerplate that 10/12 framework READMEs duplicate. The
     # API site has a curated sidebar block for these — we don't want
     # them inline in the doc body too (visual + SEO duplication).
-    SUPPORT_BOILERPLATE_RE = %r{api\.rubyonrails\.org|github\.com/rails/rails/issues|discuss\.rubyonrails\.org}.freeze
-    LICENSE_BOILERPLATE_RE = %r{opensource\.org/licenses/MIT|MIT[ -]License}i.freeze
+    SUPPORT_BOILERPLATE_RE = %r{api\.rubyonrails\.org|github\.com/rails/rails/issues|discuss\.rubyonrails\.org}
+    LICENSE_BOILERPLATE_RE = %r{opensource\.org/licenses/MIT|MIT[ -]License}i
 
     # Markdown ATX (`## Heading`) or RDoc (`== Heading`) heading line for
     # one of our trimmable sections, captured to the end of the doc so
@@ -389,8 +399,10 @@ module RailsDocsIngester
 
     def comment_text(comment)
       return nil unless comment
+
       text = comment.respond_to?(:text) ? comment.text : comment.to_s
       return nil if text.nil? || text.strip.empty?
+
       # Multi-file class/module declarations (e.g. `module ActionCable`
       # reopened across 43 files) are stitched by RDoc with "---"
       # separator lines. Most reopens have empty boilerplate comments
@@ -398,6 +410,7 @@ module RailsDocsIngester
       # a vertical bar of <hr>s after the real doc text.
       parts = text.split(/^---$/).map(&:strip).reject(&:empty?)
       return nil if parts.empty?
+
       strip_boilerplate_sections(parts.join("\n\n"))
     end
 
@@ -428,6 +441,7 @@ module RailsDocsIngester
     # Calling MARKUP_FORMAT[format].parse directly skips normalize_comment.
     def comment_html(comment)
       return nil unless comment
+
       text = comment_text(comment)
       return nil unless text
 
@@ -450,6 +464,7 @@ module RailsDocsIngester
       declared = comment.respond_to?(:format) ? comment.format : "rdoc"
       return declared if declared != "rdoc"
       return "markdown" if text.match?(/(?:\A|\n)\#{1,6}\s\S/) || text.match?(/\[[^\]]+\]\([^)]+\)/)
+
       declared
     end
 
@@ -460,6 +475,7 @@ module RailsDocsIngester
     def doc_summary(comment)
       text = comment_text(comment)
       return nil unless text
+
       first_paragraph = text.split(/\n\n+/, 2).first
       first_paragraph&.tr("\n", " ")&.strip
     end
@@ -477,6 +493,7 @@ module RailsDocsIngester
 
     def source_code_for(meth)
       return nil unless meth.respond_to?(:token_stream) && meth.token_stream
+
       meth.token_stream.map { |t| t.respond_to?(:text) ? t.text : t.to_s }.join
     rescue StandardError
       nil
@@ -485,6 +502,7 @@ module RailsDocsIngester
     def params_for(meth)
       str = meth.params.to_s.strip
       return [] if str.empty?
+
       str = str.sub(/\A\(/, "").sub(/\)\z/, "").strip
       return [] if str.empty?
 
@@ -495,34 +513,42 @@ module RailsDocsIngester
 
     def parse_param_segment(seg)
       case seg
-      when /\A\*\*([\w]*)\z/
-        {name: $1.empty? ? "kwargs" : $1, kind: "keyrest", default: nil}
-      when /\A\*([\w]*)\z/
-        {name: $1.empty? ? "args" : $1, kind: "rest", default: nil}
-      when /\A&([\w]+)\z/
-        {name: $1, kind: "block", default: nil}
-      when /\A([\w]+):\s*(.*)\z/
-        {name: $1, kind: $2.empty? ? "keyreq" : "key", default: $2.empty? ? nil : $2}
-      when /\A([\w]+)\s*=\s*(.+)\z/
-        {name: $1, kind: "opt", default: $2}
-      when /\A([\w]+)\z/
-        {name: $1, kind: "req", default: nil}
+      when /\A\*\*(\w*)\z/
+        { name: ::Regexp.last_match(1).empty? ? "kwargs" : ::Regexp.last_match(1), kind: "keyrest", default: nil }
+      when /\A\*(\w*)\z/
+        { name: ::Regexp.last_match(1).empty? ? "args" : ::Regexp.last_match(1), kind: "rest", default: nil }
+      when /\A&(\w+)\z/
+        { name: ::Regexp.last_match(1), kind: "block", default: nil }
+      when /\A(\w+):\s*(.*)\z/
+        { name: ::Regexp.last_match(1), kind: ::Regexp.last_match(2).empty? ? "keyreq" : "key",
+          default: ::Regexp.last_match(2).empty? ? nil : ::Regexp.last_match(2) }
+      when /\A(\w+)\s*=\s*(.+)\z/
+        { name: ::Regexp.last_match(1), kind: "opt", default: ::Regexp.last_match(2) }
+      when /\A(\w+)\z/
+        { name: ::Regexp.last_match(1), kind: "req", default: nil }
       else
-        {name: seg, kind: "req", default: nil}
+        { name: seg, kind: "req", default: nil }
       end
     end
 
     def framework_slug_for(klass)
       @framework_slug_cache ||= {}
       return @framework_slug_cache[klass] if @framework_slug_cache.key?(klass)
+
       @framework_slug_cache[klass] = compute_framework_slug(klass)
     end
 
     def compute_framework_slug(klass)
       first_file = klass.in_files.first
       return nil unless first_file
-      path = first_file.is_a?(String) ? first_file : (first_file.respond_to?(:full_name) ? first_file.full_name : nil)
+
+      path = if first_file.is_a?(String)
+               first_file
+             else
+               (first_file.respond_to?(:full_name) ? first_file.full_name : nil)
+             end
       return nil unless path
+
       path.split("/").each do |segment|
         return segment if FRAMEWORK_SLUGS.include?(segment)
       end
@@ -535,14 +561,15 @@ module RailsDocsIngester
 
     def parse_version(channel)
       return {} unless channel
+
       if channel =~ /\A(\d+)\.(\d+)\.(\d+)(?:[-.]?(.*))?\z/
         result = {
-          major: $1.to_i,
-          minor: $2.to_i,
-          patch: $3.to_i,
-          release_series: "#{$1}.#{$2}"
+          major: ::Regexp.last_match(1).to_i,
+          minor: ::Regexp.last_match(2).to_i,
+          patch: ::Regexp.last_match(3).to_i,
+          release_series: "#{::Regexp.last_match(1)}.#{::Regexp.last_match(2)}"
         }
-        result[:prerelease] = $4 if $4 && !$4.empty?
+        result[:prerelease] = ::Regexp.last_match(4) if ::Regexp.last_match(4) && !::Regexp.last_match(4).empty?
         result
       else
         {}

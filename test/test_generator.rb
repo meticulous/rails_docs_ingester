@@ -14,7 +14,7 @@ class TestGenerator < Minitest::Test
   end
 
   def teardown
-    @output.unlink if @output
+    @output&.unlink
   end
 
   def test_generator_is_registered
@@ -42,67 +42,67 @@ class TestGenerator < Minitest::Test
     assert framework
     assert_equal "Active Record", framework["display_name"]
 
-    base_identity = records.find { |r|
+    base_identity = records.find do |r|
       r["type"] == "entity_identity" && r["fqn"] == "ActiveRecord::Base"
-    }
+    end
     assert base_identity
     assert_equal "class", base_identity["kind"]
     assert_equal "activerecord", base_identity["framework_slug"]
 
-    save_identity = records.find { |r|
+    save_identity = records.find do |r|
       r["type"] == "entity_identity" && r["fqn"] == "ActiveRecord::Persistence#save"
-    }
+    end
     assert save_identity
     assert_equal "method", save_identity["kind"]
     assert_equal "instance", save_identity["scope"]
 
-    create_identity = records.find { |r|
+    create_identity = records.find do |r|
       r["type"] == "entity_identity" && r["fqn"] == "ActiveRecord::Persistence.create"
-    }
+    end
     assert create_identity
     assert_equal "singleton", create_identity["scope"]
 
-    save_version = records.find { |r|
+    save_version = records.find do |r|
       r["type"] == "entity_version" && r["fqn"] == "ActiveRecord::Persistence#save"
-    }
+    end
     assert save_version
     assert_includes save_version["doc_markdown"], "Saves the record to the database"
 
-    save_method_version = records.find { |r|
+    save_method_version = records.find do |r|
       r["type"] == "method_version" && r["fqn"] == "ActiveRecord::Persistence#save"
-    }
+    end
     assert save_method_version
     assert_equal false, save_method_version["ghost"]
 
-    save_params = records.select { |r|
+    save_params = records.select do |r|
       r["type"] == "method_param" && r["method_fqn"] == "ActiveRecord::Persistence#save"
-    }
+    end
     assert_equal 1, save_params.size
-    assert_equal "options", save_params.first["name"]
+    assert_equal "_options", save_params.first["name"]
     assert_equal "keyrest", save_params.first["kind"]
 
-    base_class_version = records.find { |r|
+    base_class_version = records.find do |r|
       r["type"] == "class_version" && r["fqn"] == "ActiveRecord::Base"
-    }
+    end
     assert base_class_version
 
-    persistence_edge = records.find { |r|
+    persistence_edge = records.find do |r|
       r["type"] == "inheritance_edge" &&
         r["child_fqn"] == "ActiveRecord::Base" &&
         r["ancestor_fqn"] == "ActiveRecord::Persistence" &&
         r["relation"] == "include"
-    }
+    end
     assert persistence_edge
 
-    constant = records.find { |r|
+    constant = records.find do |r|
       r["type"] == "entity_identity" && r["fqn"] == "ActiveRecord::Base::DEFAULT_PER_PAGE"
-    }
+    end
     assert constant
     assert_equal "constant", constant["kind"]
 
-    attribute = records.find { |r|
+    attribute = records.find do |r|
       r["type"] == "entity_identity" && r["fqn"] == "ActiveRecord::Base#name"
-    }
+    end
     assert attribute
     assert_equal "attribute", attribute["kind"]
   end
@@ -113,19 +113,19 @@ class TestGenerator < Minitest::Test
     Dir.mktmpdir do |tmp|
       original_argv = ARGV.dup
       ARGV.replace([
-        "-q",
-        "-f", "rails_docs_ingester",
-        "--rails-docs-output", @output.path,
-        "--rails-docs-channel", "1.0.0",
-        "--rails-docs-git-ref", "v1.0.0",
-        "--rails-docs-git-sha", "deadbeef",
-        "--rails-docs-ord", "1000000",
-        "--rails-docs-source-slug", "rails",
-        "--rails-docs-source-display-name", "Ruby on Rails",
-        "--rails-docs-source-github-repo", "rails/rails",
-        "--op", File.join(tmp, "out"),
-        FIXTURE_ROOT
-      ])
+                     "-q",
+                     "-f", "rails_docs_ingester",
+                     "--rails-docs-output", @output.path,
+                     "--rails-docs-channel", "1.0.0",
+                     "--rails-docs-git-ref", "v1.0.0",
+                     "--rails-docs-git-sha", "deadbeef",
+                     "--rails-docs-ord", "1000000",
+                     "--rails-docs-source-slug", "rails",
+                     "--rails-docs-source-display-name", "Ruby on Rails",
+                     "--rails-docs-source-github-repo", "rails/rails",
+                     "--op", File.join(tmp, "out"),
+                     FIXTURE_ROOT
+                   ])
       begin
         rdoc = RDoc::RDoc.new
         capture_io { rdoc.document(ARGV) }
@@ -141,7 +141,8 @@ class TestGenerator < Minitest::Test
 
   def capture_io
     require "stringio"
-    out, err = $stdout, $stderr
+    out = $stdout
+    err = $stderr
     $stdout = StringIO.new
     $stderr = StringIO.new
     yield

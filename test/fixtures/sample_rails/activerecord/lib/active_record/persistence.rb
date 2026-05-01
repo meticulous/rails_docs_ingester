@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module ActiveRecord
   # Persistence module — stores and updates the record.
   #
@@ -6,12 +8,12 @@ module ActiveRecord
     # Saves the record to the database.
     #
     # Returns true on success, false on validation failure.
-    def save(**options)
+    def save(**_options)
       true
     end
 
     # Saves the record or raises an error.
-    def save!(**options)
+    def save!(**_options)
       true
     end
 

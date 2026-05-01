@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module ActiveRecord
   # Base class for Active Record models.
   class Base
